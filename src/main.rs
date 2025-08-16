@@ -7,7 +7,7 @@ mod report;
 use crate::engine::AuditEngine;
 use crate::report::{OutputFormat, Reporter};
 use clap::{Parser, ValueEnum};
-use dialoguer::{theme::ColorfulTheme, Confirm, MultiSelect, Select};
+use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect, Select};
 
 #[derive(Parser, Debug)]
 #[command(name = "vps-audit", version, about = "Self-contained VPS security and health audit CLI")]
@@ -28,9 +28,9 @@ struct Cli {
     #[arg(long, default_value_t = false)]
     strict: bool,
 
-    /// Interactive wizard mode
+    /// Run non-interactively (disables wizard)
     #[arg(long, default_value_t = false)]
-    interactive: bool,
+    non_interactive: bool,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -56,7 +56,7 @@ fn main() {
         .as_ref()
         .map(|s| s.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect());
 
-    if cli.interactive {
+    if !cli.non_interactive {
         categories = interactive_select_categories(categories);
     }
 
@@ -68,8 +68,8 @@ fn main() {
     let reporter = Reporter::new(cli.verbose, cli.format.into());
     reporter.print(&results);
 
-    if cli.interactive {
-        interactive_post_actions(&results);
+    if !cli.non_interactive {
+        interactive_wizard(&results, &reporter, &mut engine);
     }
 
     if cli.strict {
@@ -101,33 +101,55 @@ fn interactive_select_categories(preset: Option<Vec<String>>) -> Option<Vec<Stri
     if selections.is_empty() { None } else { Some(selections.into_iter().map(|i| all[i].to_string()).collect()) }
 }
 
-fn interactive_post_actions(results: &[crate::model::CheckResult]) {
+fn interactive_wizard(results: &[crate::model::CheckResult], reporter: &Reporter, engine: &mut AuditEngine) {
     let theme = ColorfulTheme::default();
-    let fail_count = results.iter().filter(|r| r.status.is_fail()).count();
-    let warn_count = results.iter().filter(|r| r.status.is_warn()).count();
-    if fail_count == 0 && warn_count == 0 { return; }
-    let choices = vec!["Show remediation for failed", "Show remediation for warn", "Exit"];
+    let mut current_results = results.to_vec();
     loop {
-        let idx = Select::with_theme(&theme)
-            .with_prompt("Next action")
-            .items(&choices)
+        let (pass, warn, fail, skip) = crate::report::Reporter::counts(&current_results);
+        println!("Score: {} / 100", crate::report::Reporter::score(&current_results));
+        println!("PASS={}, WARN={}, FAIL={}, SKIP={}", pass, warn, fail, skip);
+        let options = vec![
+            "View failures",
+            "View warnings",
+            "Save report",
+            "Rerun checks",
+            "Choose categories",
+            "Exit",
+        ];
+        let choice = Select::with_theme(&theme)
+            .with_prompt("Wizard")
+            .items(&options)
             .default(0)
             .interact()
-            .unwrap_or(2);
-        match idx {
+            .unwrap_or(options.len() - 1);
+        match choice {
             0 => {
-                for r in results.iter().filter(|r| r.status.is_fail()) {
-                    if let Some(rem) = &r.remediation { println!("- {}: {}", r.id, rem); }
+                for r in current_results.iter().filter(|r| r.status.is_fail()) {
+                    println!("[FAIL] {}\n  {}\n  remediation: {}\n", r.title, r.reason, r.remediation.clone().unwrap_or_default());
                 }
             }
             1 => {
-                for r in results.iter().filter(|r| r.status.is_warn()) {
-                    if let Some(rem) = &r.remediation { println!("- {}: {}", r.id, rem); }
+                for r in current_results.iter().filter(|r| r.status.is_warn()) {
+                    println!("[WARN] {}\n  {}\n  remediation: {}\n", r.title, r.reason, r.remediation.clone().unwrap_or_default());
                 }
+            }
+            2 => {
+                let path: String = Input::with_theme(&theme).with_prompt("Save report to path").default("vps-audit-report.txt".into()).interact_text().unwrap_or_else(|_| "vps-audit-report.txt".into());
+                let contents = reporter.render(&current_results);
+                if std::fs::write(&path, contents).is_ok() { println!("Saved to {}", path); } else { println!("Failed to save to {}", path); }
+            }
+            3 => {
+                current_results = engine.run_all();
+                reporter.print(&current_results);
+            }
+            4 => {
+                let new_categories = interactive_select_categories(None);
+                *engine = crate::engine::AuditEngine::new(new_categories);
+                engine.register_default_checks();
             }
             _ => break,
         }
-        let again = Confirm::with_theme(&theme).with_prompt("Anything else?").default(false).interact().unwrap_or(false);
+        let again = Confirm::with_theme(&theme).with_prompt("Continue?").default(true).interact().unwrap_or(true);
         if !again { break; }
     }
 }
