@@ -3,7 +3,7 @@ use crate::model::{AuditCheck, CheckResult};
 
 pub struct AuditEngine {
     categories_filter: Option<Vec<String>>,
-    checks: Vec<Box<dyn AuditCheck>>, 
+    checks: Vec<Box<dyn AuditCheck>>,
 }
 
 impl AuditEngine {
