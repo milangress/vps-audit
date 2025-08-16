@@ -40,6 +40,8 @@ jobs:
 
             - name: Create GitHub Release and upload asset
               uses: softprops/action-gh-release@v2
+              permissions:
+                  contents: write
               with:
                   files: |
                       dist/${{ matrix.artifact }}

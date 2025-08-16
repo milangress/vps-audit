@@ -18,6 +18,13 @@ cargo build --release
 ./target/release/vps-audit --help
 ```
 
+### Release with cargo-release
+```bash
+cargo install cargo-release
+cargo release patch
+# or: cargo release minor / major
+```
+
 ### Examples
 ```bash
 vps-audit --verbose

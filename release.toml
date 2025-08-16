@@ -1,17 +1,13 @@
-[release]
 tag-name = "v{{version}}"
 tag-message = "Release v{{version}}"
 allow-branch = ["main"]
 push-remote = "origin"
 consolidate-commits = true
 pre-release-commit-message = "chore(release): v{{version}}"
-no-dev-version = true
-create-release = true
-release-name = "v{{version}}"
 sign-commit = false
 sign-tag = false
-
-[registry]
 publish = false
+verify = true
+push = true
 
 
