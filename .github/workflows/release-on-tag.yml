@@ -5,8 +5,11 @@ on:
         tags:
             - "v*"
 
+permissions:
+    contents: write
+
 jobs:
-    build-and-release:
+    build:
         runs-on: ubuntu-latest
         strategy:
             fail-fast: false
@@ -34,18 +37,30 @@ jobs:
                   CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
               run: |
                   cargo build --release --target ${{ matrix.target }}
-                  mkdir -p dist
-                  cp target/${{ matrix.target }}/release/vps-audit dist/${{ matrix.artifact }}
-                  chmod +x dist/${{ matrix.artifact }}
+                  mkdir -p dist/${{ matrix.target }}
+                  cp target/${{ matrix.target }}/release/vps-audit dist/${{ matrix.target }}/${{ matrix.artifact }}
+                  chmod +x dist/${{ matrix.target }}/${{ matrix.artifact }}
 
-            - name: Create GitHub Release and upload asset
+            - name: Upload artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ${{ matrix.artifact }}
+                  path: dist/${{ matrix.target }}/${{ matrix.artifact }}
+
+    release:
+        runs-on: ubuntu-latest
+        needs: build
+        steps:
+            - name: Download artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  path: dist
+                  merge-multiple: true
+
+            - name: Create GitHub Release and upload assets
               uses: softprops/action-gh-release@v2
-              permissions:
-                  contents: write
               with:
                   files: |
-                      dist/${{ matrix.artifact }}
+                      dist/*
                   draft: false
                   prerelease: false
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

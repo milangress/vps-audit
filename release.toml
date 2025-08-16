@@ -3,7 +3,6 @@ tag-message = "Release v{{version}}"
 allow-branch = ["main"]
 push-remote = "origin"
 consolidate-commits = true
-pre-release-commit-message = "chore(release): v{{version}}"
 sign-commit = false
 sign-tag = false
 publish = false
