@@ -28,6 +28,8 @@ impl AuditEngine {
         self.register(policy::PasswordPolicyCheck);
         self.register(files::SuidFilesCheck);
         self.register(network::ListeningPortsCheck);
+        self.register(firewall::FirewallPresenceCheck);
+        self.register(firewall::NftablesRulesCheck);
     }
 
     pub fn run_all(&self) -> Vec<CheckResult> {
